@@ -16,8 +16,8 @@ import com.auth0.android.management.UsersAPIClient;
 import com.auth0.android.result.Credentials;
 import com.auth0.android.result.UserIdentity;
 import com.auth0.linkingaccountsdemo.R;
-import com.auth0.linkingaccountsdemo.application.App;
 import com.auth0.linkingaccountsdemo.utils.Constants;
+import com.auth0.linkingaccountsdemo.utils.CredentialsManager;
 
 import java.util.List;
 
@@ -26,9 +26,10 @@ public class LoginActivity extends Activity {
 
     private Lock mLock;
     private Auth0 mAuth0;
-    private boolean mLinkSessions = false;
+    private boolean mLinkSessions;
     private String mPrimaryUserId;
 
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
@@ -37,6 +38,7 @@ public class LoginActivity extends Activity {
             mPrimaryUserId = getIntent().getExtras().getString(Constants.PRIMARY_USER_ID);
         }
         mAuth0 = new Auth0(getString(R.string.auth0_client_id), getString(R.string.auth0_domain));
+        mAuth0.setOIDCConformant(true);
         mLock = Lock.newBuilder(mAuth0, mCallback)
                 .closable(mLinkSessions)
                 //Add parameters to the build
@@ -58,31 +60,31 @@ public class LoginActivity extends Activity {
             Toast.makeText(LoginActivity.this, "Log In - Success", Toast.LENGTH_SHORT).show();
 
             if (mLinkSessions) {
-                UsersAPIClient client = new UsersAPIClient(mAuth0, App.getInstance().getUserCredentials().getIdToken());
+                UsersAPIClient client = new UsersAPIClient(mAuth0, CredentialsManager.getCredentials(LoginActivity.this).getIdToken());
                 client.link(mPrimaryUserId, credentials.getIdToken())
-                .start(new BaseCallback<List<UserIdentity>, ManagementException>() {
-                    @Override
-                    public void onSuccess(List<UserIdentity> payload) {
-                        LoginActivity.this.runOnUiThread(new Runnable() {
-                            public void run() {
-                                Toast.makeText(LoginActivity.this, "Accounts linked!", Toast.LENGTH_SHORT).show();
+                        .start(new BaseCallback<List<UserIdentity>, ManagementException>() {
+                            @Override
+                            public void onSuccess(List<UserIdentity> payload) {
+                                runOnUiThread(new Runnable() {
+                                    public void run() {
+                                        Toast.makeText(LoginActivity.this, "Accounts linked!", Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                                finish();
                             }
-                        });
-                        finish();
-                    }
 
-                    @Override
-                    public void onFailure(ManagementException error) {
-                        LoginActivity.this.runOnUiThread(new Runnable() {
-                            public void run() {
-                                Toast.makeText(LoginActivity.this, "Account linking failed!", Toast.LENGTH_SHORT).show();
+                            @Override
+                            public void onFailure(ManagementException error) {
+                                runOnUiThread(new Runnable() {
+                                    public void run() {
+                                        Toast.makeText(LoginActivity.this, "Account linking failed!", Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                                finish();
                             }
                         });
-                        finish();
-                    }
-                });
             } else {
-                App.getInstance().setUserCredentials(credentials);
+                CredentialsManager.saveCredentials(LoginActivity.this, credentials);
                 startActivity(new Intent(LoginActivity.this, MainActivity.class));
                 finish();
             }

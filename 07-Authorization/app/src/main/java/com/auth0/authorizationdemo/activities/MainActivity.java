@@ -3,7 +3,6 @@ package com.auth0.authorizationdemo.activities;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -14,15 +13,16 @@ import com.auth0.android.Auth0;
 import com.auth0.android.authentication.AuthenticationAPIClient;
 import com.auth0.android.authentication.AuthenticationException;
 import com.auth0.android.callback.BaseCallback;
+import com.auth0.android.management.ManagementException;
+import com.auth0.android.management.UsersAPIClient;
 import com.auth0.android.result.UserProfile;
 import com.auth0.authorizationdemo.R;
-import com.auth0.authorizationdemo.application.App;
+import com.auth0.authorizationdemo.utils.CredentialsManager;
 import com.squareup.picasso.Picasso;
 
 
 public class MainActivity extends AppCompatActivity {
 
-    private Button mToSettingsButton;
     private UserProfile mUserProfile;
 
     @Override
@@ -38,60 +38,76 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        AuthenticationAPIClient client = new AuthenticationAPIClient(new Auth0(getString(R.string.auth0_client_id), getString(R.string.auth0_domain)));
-        client.tokenInfo(App.getInstance().getmUserCredentials().getIdToken())
+        final Auth0 auth0 = new Auth0(getString(R.string.auth0_client_id), getString(R.string.auth0_domain));
+        auth0.setOIDCConformant(true);
+        AuthenticationAPIClient authenticationClient = new AuthenticationAPIClient(auth0);
+        authenticationClient.userInfo(CredentialsManager.getCredentials(this).getAccessToken())
                 .start(new BaseCallback<UserProfile, AuthenticationException>() {
                     @Override
-                    public void onSuccess(final UserProfile payload) {
-                        MainActivity.this.runOnUiThread(new Runnable() {
-                            public void run() {
-                                mUserProfile = payload;
-                                ((TextView) findViewById(R.id.username)).setText(mUserProfile.getName());
-                                ((TextView) findViewById(R.id.usermail)).setText(mUserProfile.getEmail());
-                                ImageView userPicture = (ImageView) findViewById(R.id.userPicture);
-                                Picasso.with(getApplicationContext()).load(mUserProfile.getPictureURL()).into(userPicture);
+                    public void onSuccess(final UserProfile info) {
+                        String userId = (String) info.getExtraInfo().get("sub");
+                        UsersAPIClient usersClient = new UsersAPIClient(auth0, CredentialsManager.getCredentials(MainActivity.this).getIdToken());
+                        usersClient.getProfile(userId).start(new BaseCallback<UserProfile, ManagementException>() {
+                            @Override
+                            public void onSuccess(final UserProfile profile) {
+                                runOnUiThread(new Runnable() {
+                                    public void run() {
+                                        mUserProfile = profile;
+                                        ((TextView) findViewById(R.id.userName)).setText(mUserProfile.getName());
+                                        ((TextView) findViewById(R.id.userEmail)).setText(mUserProfile.getEmail());
+                                        ImageView userPicture = (ImageView) findViewById(R.id.userPicture);
+                                        Picasso.with(MainActivity.this).load(mUserProfile.getPictureURL()).into(userPicture);
+                                    }
+                                });
+                            }
 
-                                // Get the country from the user profile
-                                // This is included in the extra info... and must be enabled in the Auth0 rules web.
-                                try {
-                                    ((TextView) findViewById(R.id.userCountry)).setText(mUserProfile.getExtraInfo().get("country").toString());
-                                } catch (Exception e) {
-                                    Log.e("AUTH0", "Failed assigning country info... check if country rule is enabled in Auth0 web");
-                                }
-
+                            @Override
+                            public void onFailure(ManagementException error) {
                             }
                         });
-
                     }
 
                     @Override
                     public void onFailure(AuthenticationException error) {
-                        Toast.makeText(MainActivity.this, "Failed to load the profile", Toast.LENGTH_SHORT).show();
+                        runOnUiThread(new Runnable() {
+                            public void run() {
+                                Toast.makeText(MainActivity.this, "Failed to load the profile", Toast.LENGTH_SHORT).show();
+                            }
+                        });
                         finish();
                     }
                 });
 
-        mToSettingsButton = (Button) findViewById(R.id.toSettingsButton);
-        mToSettingsButton.setOnClickListener(new View.OnClickListener() {
+        Button showSettingsButton = (Button) findViewById(R.id.toSettingsButton);
+        showSettingsButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                toSettings();
+                showSettings();
             }
         });
 
     }
 
-    private void toSettings() {
-        String role = mUserProfile.getAppMetadata().get("roles").toString();
+    private void showSettings() {
+        String[] roles = (String[]) mUserProfile.getAppMetadata().get("roles");
+        if (roles == null) {
+            Toast.makeText(MainActivity.this, "Missing roles from the Profile. Check the rules in the dashboard.", Toast.LENGTH_LONG).show();
+            return;
+        }
 
-        if (role.contains("admin"))
-            startActivity(new Intent(this, SettingsActivity.class));
-        else
-            Toast.makeText(MainActivity.this, "You don't have access rights to visit this page", Toast.LENGTH_SHORT).show();
+        for (String role : roles) {
+            if (role.contains("admin")) {
+                startActivity(new Intent(this, SettingsActivity.class));
+                return;
+            }
+        }
+
+        Toast.makeText(MainActivity.this, "You don't have access rights to visit this page", Toast.LENGTH_SHORT).show();
     }
 
     private void loginAgain() {
         startActivity(new Intent(this, LoginActivity.class));
+        CredentialsManager.deleteCredentials(this);
         finish();
     }
 }

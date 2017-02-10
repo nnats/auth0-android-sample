@@ -12,16 +12,18 @@ import com.auth0.android.lock.LockCallback;
 import com.auth0.android.lock.utils.LockException;
 import com.auth0.android.result.Credentials;
 import com.auth0.callyourapidemo.R;
-import com.auth0.callyourapidemo.application.App;
+import com.auth0.callyourapidemo.utils.CredentialsManager;
 
 public class LoginActivity extends Activity {
 
     private Lock mLock;
 
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         Auth0 auth0 = new Auth0(getString(R.string.auth0_client_id), getString(R.string.auth0_domain));
+        auth0.setOIDCConformant(true);
         mLock = Lock.newBuilder(auth0, mCallback)
                 //Add parameters to the build
                 .build(this);
@@ -40,8 +42,9 @@ public class LoginActivity extends Activity {
         @Override
         public void onAuthentication(Credentials credentials) {
             Toast.makeText(LoginActivity.this, "Log In - Success", Toast.LENGTH_SHORT).show();
-            App.getInstance().setUserCredentials(credentials);
+            CredentialsManager.saveCredentials(LoginActivity.this, credentials);
             startActivity(new Intent(LoginActivity.this, MainActivity.class));
+            finish();
         }
 
         @Override

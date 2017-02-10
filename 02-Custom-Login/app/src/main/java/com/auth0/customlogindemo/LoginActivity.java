@@ -18,6 +18,7 @@ public class LoginActivity extends Activity {
 
     private static final String DEFAULT_DB_CONNECTION = "Username-Password-Authentication";
 
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_login);
@@ -35,18 +36,18 @@ public class LoginActivity extends Activity {
                 login(emailEditText.getText().toString(), passwordEditText.getText().toString());
             }
         });
-
-
     }
 
     private void login(String email, String password) {
         Auth0 auth0 = new Auth0(getString(R.string.auth0_client_id), getString(R.string.auth0_domain));
+        auth0.setOIDCConformant(true);
         AuthenticationAPIClient client = new AuthenticationAPIClient(auth0);
 
         client.login(email, password, DEFAULT_DB_CONNECTION).start(new BaseCallback<Credentials, AuthenticationException>() {
             @Override
             public void onSuccess(Credentials payload) {
                 startActivity(new Intent(LoginActivity.this, MainActivity.class));
+                finish();
             }
 
             @Override
